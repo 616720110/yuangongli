@@ -31,3 +31,17 @@
 > 3. <u>redis-cli shutdown nosave | save 可选择不持久化</u>
 6. <u> Redi 版本规则</u> 第二位奇数 非稳定版本。 偶数，稳定版本
 > 1. Redis3.0是重要的里程碑，发布了Redis官方的分布式实现Redis Cluster
+
+### <center>第二章 API的理解和使用</center>
+理解redis机制，学会命令的通用性
+
+1. <u>全局命令</u>
+> 1. 查看所有键： key *
+> 2. 总键数：dbsize
+```  
+    dbsize 在计算总数时不会遍历所有键，而是直接获取Redis内置的键总数。时间复杂度O(1)
+    而keys命令会遍历所有键。时间复杂度O（n）
+```
+>3. 检查键是否存在: exists key
+>4. 删除键： del key
+>5. 键过期： expire key seconds
