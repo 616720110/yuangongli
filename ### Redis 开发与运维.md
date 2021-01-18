@@ -44,4 +44,40 @@
 ```
 >3. 检查键是否存在: exists key
 >4. 删除键： del key
->5. 键过期： expire key seconds
+>5. 键过期： expire key seconds / ttl key 返回剩余时间
+>6. 键的数据结构类型：type key
+2. <u> 数据结构和内部编码</u>:对外的五种数据结构，内部都有自己的实现编码，而且是多种实现，可以通过object encoding 命令查询内部编码
+
+![image](https://github.com/616720110/yuangongli/blob/master/redisPricture/1610523854(1).jpg)
+
+```
+内外编码分层优势：可以改进内部编码，而对的数据结构和命令没有影响
+```
+2. <u>单线程架构</u>
+>1. redis接收命令放入队列中，然后逐个执行。
+> > 1. 存内存访问，非阻塞I/O,使用epoll作为I/O多路复用技术的实现且Redis自身的事件处理模型将epoll中的连接，读写，关闭都转换为实践。不在I/O上浪费过多的时间
+
+2.1. <u>命令</u>
+<center>String</center>
+
+1. 批量设置获取 mget /mset   (multi)批量设置可以减少网络传输
+2. 设置新值返回旧值 setget key
+3. 获取部分字符串 getrange key start end
+4. 内部编码
+> string内部编码有3种：
+>> int：8个字节得长整型  
+>> embstr: 小于等于39个字符的字符串  
+>> raw: 大于39个字节的字符串  
+Redis会根据当前值的类型和长度决定使用哪种内部编码实现。
+<center>哈希 (hash,字典，关联数组） 其对应类型关系为 key-field-value</center>
+
+1. 计算key中field个数：hlen key
+2. hmget/hmset 批量设置和获取：hmset key field1 vaule1 field2 value2
+3. 获取所有的field: hkeys key  (hkeys 命令叫hfeilds 更为恰当)
+4. 获取所有的vaule: hvals key  <font color="red"> O(n) n为field总数 </font>
+> 在使用hgetall时，如果哈希元素个数比较多，会存在阻塞Redis可能，如果只需要获取部分field,可以使用hmget,如果一定要使用获取全部filed-vaule,可以使用hscan命令，改命令会渐进式遍历哈希类型。  
+
+5. 内部编码
+>hash 内部编码有两种
+>> ziplist（压缩列表）当hash类型元素个数小于hash-max-ziplist-entries配置（default 512），同时所有值小于hash-max-ziplist-vaule配置（default64字节）。使用ziplist,其为更加紧凑的结构实现多个元素的连续存储，在节省内存方面比hashtable更加优秀。  
+>> hashtable(哈希表)：当哈希无法满足ziplist的条件时。大数据和大量数据ziplist的读写效率会下降，故使用hashtable,其时间杂度为O(1)
