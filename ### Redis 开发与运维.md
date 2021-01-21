@@ -137,3 +137,5 @@ type/del/object/exists/expire
 > 如果过期时间为负值，建会立即被删除。如del  
 > persist 命令可以将键的过期时间清除。  
 > <u><font color="red">对于字符串类型，执行set命令会去掉过期时间。</font></u>
+>> ![image](https://github.com/616720110/yuangongli/blob/master/redisPricture/1611196685(1).jpg)
+4. redis 不支持二级数据结构的过期功能
