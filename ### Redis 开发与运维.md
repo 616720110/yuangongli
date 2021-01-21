@@ -139,3 +139,80 @@ type/del/object/exists/expire
 > <u><font color="red">对于字符串类型，执行set命令会去掉过期时间。</font></u>
 >> ![image](https://github.com/616720110/yuangongli/blob/master/redisPricture/1611196685(1).jpg)
 4. redis 不支持二级数据结构的过期功能
+
+
+<center>迁移键，不同服务之间迁移</center>  
+
+1. move:redis内部进行迁移，不同库之间移动。  
+2. dump + restore: dump key  + restore key ttl value : 可以实现不同Redis实例之间进行数据迁移功能。  
+> 在源Redis上，dump命令会将键值序列化，格式采用的是RDB格式。
+> 在目标Redis上，restore命令将上面序列化的值进行复原，其中ttl参数代表过期时间。如果ttl=0代表没有过期时间。
+>> ![image](https://github.com/616720110/yuangongli/blob/master/redisPricture/1611198753(1).jpg)  
+3. migrate:migrate 实际上就是将 dump。restore。del 三个命令进行组合。从而简化操作流程。且其具有原子性
+>一，整个过程是原子执行，不需要再多个redis实例上开启客户端。只需要在源Redis上migrate即可。  
+
+>二，migrate命令的数据传输直接在源Redis和目标Redis上完成  
+
+>三，目标Redis完成restore后会发送OK给源Redis。源redis接收后会根据migrate对应的选项来决定是否在源Redis上删除对应的键。
+
+<center>遍历键</center>
+Redis提供了两个命令遍历所有键，分别是keys，scan。
+
+1. 全量遍历键
+keys pattern
+2. 渐进式遍历: scan cursor [match pattern] [count number]
+> 每次只需scan，可以想象成只扫描一个字典中的一部分键，直到将字典中的所有键遍历完毕。所以要想实现keys的命令，需要执行多次scan  
+
+> cursor 是必要参数，实际上cursor是一个游标，第一次遍历从0开始，每次scan遍历完都会返回当前游标值，直到游标值为0，表示遍历结束。  
+
+> count number 是可选参数，他的作用是表面每次要遍历的键个数，默认值是10，次参数可以适当放大
+
+> 除了scan 以为Redis提供了解决hgetall,smembers,zrange 可能产生的阻塞问题。对应分别为hscan,sscan,zscan  
+
+> scan 如果处理时出现键的变化（add,del,update）那么遍历效果可能会碰到如下问题：新增的键可能没有遍历到，遍历出了重复键的情况。也就是说scan并不能保证完整的遍历出来所有键。
+
+<center>数据库管理</center>
+
+1. 切换数据库：select dbIndex [redis默认配置中是有16个数据库] databases 16
+ > 此功能被弱化
+ >> 因为redis为单线程，如果使用多个数据库，那么这些数据库仍然使用一个CPU。
+ >> 部分Redis客户端不支持，且容易混乱  
+ 2. 清楚数据库：flushdb/flushall ，flushdb只清楚当前数据库，flushall清除所有数据库
+ > 如果当前数据库键值数量比较多，会存在阻塞的可能性。
+
+<center>第二章总结</center>
+
+1. redis提供五种数据结构，每种都有多种内部编码实现
+2. 纯内存存储，IO多路复用技术，单线程架构是Redis高性能的三个因素
+3. 批量操作（mget/mset/hmset等）能够有效提高命令执行的效率，但要注意每次批量操作的个数和字节数
+4. 了解各命令的复杂度， keys,hgetall,smembers,zrange等复杂度较高命令时。需要考虑影响
+6. persist命令可以删除任意类型键的过期时间，但set命令也会删除字符串类型的过期时间。
+7. move,dump+restore,migrate 是redis发展过程中的三种迁移方式。
+8. scan命令可以解决keys命令可能带来的阻塞问题。同事redis还提供了hscan,sscan,zscan渐进式遍历hash,list，set
+
+<center>第三章 小功能大用处</center>
+
+慢查询分析
+> redis命令执行。发送命令，命令排队，命令执行，返回结构
+> 慢查询只统计步骤3命令执行的时间。所以没有慢查询日志并不代表客户端没有超时问题。
+>> 慢查询的两个配置。 
+>>> 1. 预设值怎么设置？
+>>> 2. 慢查询记录放在哪里？  
+
+>>> redis提供了slowlog-slower-than （阈值，单位微妙，默认10000） 和 slowlog-max-len配置来解决这两个问题    
+
+>>> 如果slowlog-slower-than=0会记录所有命令，slowlog-log-slower-than<0对于任何命令都不会进行记录  
+
+>>> slowlog-max-len 设置为记录最大条数，其符合先进先出策略  
+
+>>> 配置可以通过修改配置文件 和 动态修改 config set slowlog-log-slower-than=20000  
+
+>>> config rewriter 命令可以将配置实例化到本地配置文件中
+>>> 慢查询日志存放在redis本地内存中，
+>>>> 查看命令： slowlog get [n]  n 为指定条数
+>>>> 每条slowlog都有四个值 依次分别为：id,发生时间戳，命令耗时，执行命令和参数  
+
+>> 慢查询重置 slowlog reset
+
+慢日志最佳实践
+> 线上建议调大慢查询列表，Redis会对长命令做截断操作，并不会占用大量内存。建议为1000+
