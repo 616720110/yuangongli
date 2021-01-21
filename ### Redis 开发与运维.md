@@ -81,3 +81,59 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现。
 >hash 内部编码有两种
 >> ziplist（压缩列表）当hash类型元素个数小于hash-max-ziplist-entries配置（default 512），同时所有值小于hash-max-ziplist-vaule配置（default64字节）。使用ziplist,其为更加紧凑的结构实现多个元素的连续存储，在节省内存方面比hashtable更加优秀。  
 >> hashtable(哈希表)：当哈希无法满足ziplist的条件时。大数据和大量数据ziplist的读写效率会下降，故使用hashtable,其时间杂度为O(1)
+
+<Center>List 列表</center>  
+
+1. 删除指定元素:lrem key count vaule   
+2. 修改指定元素：lset key index newVaule
+3. 阻塞操作：blpop/brpop:blpop lsit 3,列表为null，等待3秒后是否有值（如果指定多个list，会遍历key，直到发现一个key里面有值） 如果多个客户端同时执行brpop最先执行的获取到弹出的值
+4. 按照索引范围修剪列表：ltrim
+5. 内部编码  
+
+> ziplist： list-max-ziplist-entries(512),list-max-ziplist-vaule(64字节)  
+
+> linkedlist:
+
+> quicklist：结合ziplist和linkedlist的有点 (https://matt.sh/redis-quicklist)
+
+lpush+lpop = 栈  
+lpush+rpop = 队列
+lpush+ ltrim = 有限集合
+lpush+brpop = 消息队列 
+ 
+ <center>集合。 唯一，无序。不能通过index 搜检</center>
+
+1. 删除元素：srem key
+2. 计算元素个数： scard key  O(1),其不会遍历集合，而是取内部变量值
+3. 判断是否为集合中：sismember key
+4. 随机从集合中返回指定个元素：sranmember key count
+5. 获取所有元素：smembers key  smembers/lrange/hgettall 都属于比较重的命令，如果元素过多存在阻塞的可能性，这时候可以使用sscan来完成。
+6. 集合间操作  
+
+ > 求多个集合的交集： sinter key1 key2  
+ >求多个集合的并集：suinon key1 key2  
+ > 求多个集合的差集：sdiff key1 key2
+ > 由于交集，并集，差集比较耗时，同时提供了将集合的结果保存， s[commond]store destination key [set1 set2]  
+
+ 7. 内部编码  
+ > inset:整数集合，当元素都是整数且个数小于 set-max-intset-entries（512个）时  
+ > hashtable:哈希表，当集合类型无法满足intset时。  
+ 8. 应用 
+ > sadd=Tagging （标签）
+ > spop/srandmember = Random item (生产随机数，比如抽奖)
+ > sadd + sinter = Social Graph (社交需求)
+
+<center>有序集合 zset</center>
+
+
+
+
+<center>单个键管理</center>
+type/del/object/exists/expire
+
+1. 键重命名 rename key new key
+2. 随机返回一个键： randomkey
+3. 键值过期： expire/pexpireat : 内部皆为pexpireat 毫毛实现。
+> 如果过期时间为负值，建会立即被删除。如del  
+> persist 命令可以将键的过期时间清除。  
+> <u><font color="red">对于字符串类型，执行set命令会去掉过期时间。</font></u>
