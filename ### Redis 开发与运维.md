@@ -216,3 +216,79 @@ keys pattern
 
 慢日志最佳实践
 > 线上建议调大慢查询列表，Redis会对长命令做截断操作，并不会占用大量内存。建议为1000+
+
+<center>Redis shell</center>  
+
+1. redis-cli 详解
+> 1. -r：repeat 代表将命令执行多次。 如 redis-cli -i ping 会执行三次ping  
+> 2. -i: interval 代表每隔多少秒执行一次  
+> 3. -x: 代表从标准输入（stdin）读取数据作为redis-cli的最后一个参数  echo “world” | redis-cli -x set hello  
+> 4. -c: cluster 是连接Redis cluster节点时需要使用的。 -c可以防止moved，ask
+> 5. -a: 如果Redis配置了密码，-a选项可以不用再手动输入auth
+> 6. --scan和--pattern：用于扫描指定模型键，相当于scan
+> 8. --rdb：会请求Reids实列生成并发送RDB持久化文件。保持本地可以使用它做持久化文件的定期备份
+> 9. --pipe: 用于将命令封装成Redis通信协议定义的数据格式，批量发送给Redis执行。 echo -en 'xxxx' | redis-cli --pipe
+> 10. --bigkeys: 使用scan命令对Redis的键进行采样，从中找到内存占用比较大的键值。这些键可能是系统的瓶颈。
+> 11. --eval: 用于执行Lua脚本。
+> 12. --latency： 用于检测网络延迟
+> 13. --stat: 实时获取redis的统计信息
+> 14. <font color="red">--raw 和 --no-raw ：--no-raw 要求命令返回的结果必须是原始的格式/ --raw 返回格式化之后的结果</font>
+>>  set hello "你好"，  正常执行get或者--no-raw选项，将返回二进制格式
+>>  redis-cli --raw get hello 将返回中文。
+
+<center>redis-service</center>
+
+1. 检测当前操作系统能否文档分配内存， redis-server --test-memory 1024 (慎用，其可想快速占满机器内存做一些极端测试)
+
+<center> redis-benchmark :redis的性能测试工具。</center>
+
+<center>Pipeline</center>
+
+1. redis发送命令 和 返回结果 的网络传输，称做 Round + trip + time (RTT，往返时间)。  
+
+>> 1. Pipeline 主要解决批量命令通过一次RTT按顺序传输给Redis，在将这组Redis的执行结果按顺序返回给客户端。
+
+2. 原生命令与pipeline对比
+>> 1. 原生命令为原子操作
+>> 2. 原生命令是一个命令对多个 key， 而pipeline为支持多个命令。
+>> 3. 原生命令为Redis服务端支持， 而pipeline 为s/c共同实现  
+
+
+<center> 事务与Lua Redis的事务以集成Lua脚本来解决这个问题 </center>
+
+1. multi：开始事务，之后的命令会放入QUEUED中。  exec：结束事务 只有当执行ecex时，命令才会真正执行。
+2. 如果要终止事务的执行， discard。 redis不支持回滚功能，出错了需要修补数据.
+3. 有些场景要在事务之前，确保事务中key没有被其他客户端修改过，才执行事务。否则不执行。（乐观锁）Redis提供了watch 命令来解决。
+4. Redis 中使用Lua 有两种方法， eval 和 evalsha  
+
+>> 1. evalsha命令执行Lua， 首先将Lua脚本加载到Redis服务端，得到该脚本的SHA1校验和，evalsha命令使用sha1作为参数可以直接执行对应Lua脚本。避免每次发送Lua脚本的开销。
+这样客户端就不需要每次执行脚本内容， 而脚本常驻服务端。  
+>> 2. script load 命令可以将脚本内容加载到Redis内存中。得到sha1   redis-cli script load $(aa.lua)  执行脚本 evalsha的方法如下， evalsha has1值 key个数 ley列表 参数列表
+>> 3. Lua可以使用Redis.call 对redis进行访问。也可以用redis.pcall。
+>>> redis.call 执行失败，那么脚本执行结束会直接返回错误，而redis.pcall会忽视错误继续执行脚本。
+
+Redis如何管理Lua脚本  
+
+1. script load : 用于将脚本加载到内存中。 
+2. script exists: 用于判sha1 是否已经加载到Redis内存中
+3. script flush：用于清楚Redis已经加载的所有lua脚本
+4. script kill： 用于杀掉正在执行的Lua脚本
+
+Bitmaps : 图位操作。
+
+Redis 发布订阅机制
+ 1. publish channel meassage : 发布消息
+ 2. subscribe channel : 订阅消息  
+ 3. unsubscribe channel：取消订阅
+
+ <center>Java 对redis的使用</center>
+
+1. 获取Jedis 依赖Jedis-{version}.jar 
+2. Jedis连接池的使用方法（避免每次直连，操作创建TCP）  JedisPool.get();
+3. Jedis 可以使用pipeline 对象来添加流水线操作。也可以eval/evalhas 来执行lua脚本。
+4. info clients: 可查看client 的配置信息
+5. client setName /client getName
+6. client kill ip:port : 用于杀掉指定IP地址和端口的客户端
+7. client pause timeout： 阻塞客户端多少 毫秒
+8. monitor : 可以监听其他客户端执行的命令。（每个客户端都有自己的输出缓冲区，如果并发过大。monitor客户端的输出缓冲会暴涨。可能瞬间会占用大量内存）
+9. info stats: 查看统计信息，比如查看总共连接数、拒绝数量。来判断是否假死。
